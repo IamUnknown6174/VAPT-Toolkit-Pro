@@ -1,0 +1,11 @@
+# Reports
+*.csv
+sri_missing_report.csv
+
+# Temporary files
+*.tmp
+*.html
+
+# OS files
+.DS_Store
+Thumbs.db
