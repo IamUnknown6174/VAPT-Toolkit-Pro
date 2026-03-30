@@ -1,4 +1,4 @@
-# 🛡️ VAPT Toolkit Pro (Python)
+# 🛡️ VAPT Toolkit Pro
 
 A professional, menu-driven VAPT (Vulnerability Assessment and Penetration Testing) toolkit written in pure Bash. This tool is designed for security researchers, sysadmins, and bug hunters to perform quick, automated security checks directly from the terminal.
 
