@@ -66,6 +66,27 @@ else
     PORTS=(21 22 23 25 53 80 110 111 135 139 143 443 445 993 995 1433 1521 3306 3389 5432 5900 6379 8080 8443 8888 9090 27017 11211 2049 5000 5601 9200 9300 6443 2375 2376 4443 8000 8081 10000 50000 1080 1443 389 636 161 162 514 1194 1723)
 fi
 
+# Helper to grab service banner/version
+grab_banner() {
+    local target=$1
+    local port=$2
+    local banner=""
+
+    # Try to catch a greeting banner (SSH, FTP, etc.)
+    banner=$(nc -w 1 -G 2 "$target" "$port" </dev/null 2>/dev/null | tr -cd '\11\12\15\40-\176' | head -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    # If empty and common web port, try a quick HEAD request
+    if [ -z "$banner" ]; then
+        case $port in
+            80|443|8080|8443)
+                banner=$(printf "HEAD / HTTP/1.0\r\n\r\n" | nc -w 1 -G 2 "$target" "$port" 2>/dev/null | grep -i "^Server:" | head -n 1 | sed 's/^Server: *//i' | tr -d '\r')
+                [ -z "$banner" ] && banner=$(printf "HEAD / HTTP/1.0\r\n\r\n" | nc -w 1 -G 2 "$target" "$port" 2>/dev/null | head -n 1 | tr -d '\r')
+                ;;
+        esac
+    fi
+    echo "$banner"
+}
+
 echo -e "${BLUE}========== SCANNING PORTS ==========${RESET}"
 echo ""
 
@@ -77,13 +98,25 @@ for PORT in "${PORTS[@]}"; do
     CURRENT=$((CURRENT + 1))
     SERVICE=$(get_service "$PORT")
 
-    # Timeout-based port check using /dev/tcp
-    (echo >/dev/tcp/"$TARGET"/"$PORT") 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}[OPEN]${RESET}     Port $PORT/$SERVICE"
+    # Progress Indicator (Updates on the same line)
+    printf "\r${YELLOW}[SCANNING]${RESET} %-25s [%d/%d]" "$TARGET:$PORT" "$CURRENT" "$TOTAL"
+
+    # Port check
+    if (echo >/dev/tcp/"$TARGET"/"$PORT") 2>/dev/null; then
+        # If open, clear progress line and print permanent result
+        BANNER=$(grab_banner "$TARGET" "$PORT")
+        printf "\r\033[K" # Clear the scanning line
+        if [ -n "$BANNER" ]; then
+            echo -e "${GREEN}[OPEN]${RESET}     Port $PORT/$SERVICE — ${CYAN}$BANNER${RESET}"
+        else
+            echo -e "${GREEN}[OPEN]${RESET}     Port $PORT/$SERVICE"
+        fi
         OPEN_COUNT=$((OPEN_COUNT + 1))
     fi
 done
+
+# Clear final progress line
+printf "\r\033[K"
 
 echo ""
 echo -e "${BLUE}=====================================${RESET}"
