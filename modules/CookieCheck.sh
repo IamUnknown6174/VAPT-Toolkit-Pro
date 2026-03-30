@@ -50,11 +50,6 @@ if [ -z "$COOKIES" ]; then
     exit 0
 fi
 
-echo -e "${BLUE}========== RAW SET-COOKIE HEADERS ==========${RESET}"
-echo "$COOKIES"
-echo -e "${BLUE}=============================================${RESET}"
-echo ""
-
 echo -e "${BLUE}========== COOKIE SECURITY ANALYSIS ==========${RESET}"
 echo ""
 
@@ -64,13 +59,18 @@ ISSUES_COUNT=0
 while IFS= read -r LINE; do
     COOKIE_COUNT=$((COOKIE_COUNT + 1))
 
-    # Extract cookie name
-    COOKIE_NAME=$(echo "$LINE" | sed 's/^Set-Cookie: *//i' | cut -d'=' -f1)
+    # Clean the line (remove carriage returns to ensure clean printing)
+    CLEAN_LINE=$(echo "$LINE" | tr -d '\r')
+
+    # Extract cookie name and raw value
+    COOKIE_NAME=$(echo "$CLEAN_LINE" | sed 's/^Set-Cookie: *//i' | cut -d'=' -f1)
+    RAW_COOKIE=$(echo "$CLEAN_LINE" | sed 's/^Set-Cookie: *//i')
 
     echo -e "${CYAN}━━━ Cookie: ${RESET}$COOKIE_NAME"
+    echo -e "    ${YELLOW}Raw Header: ${RESET}$RAW_COOKIE"
 
     # Check Secure flag
-    if echo "$LINE" | grep -qi "Secure"; then
+    if echo "$CLEAN_LINE" | grep -qi "Secure"; then
         echo -e "    ${GREEN}[OK]${RESET}      Secure flag present"
     else
         echo -e "    ${RED}[MISSING]${RESET}  Secure flag — cookie sent over HTTP (interception risk)"
@@ -78,7 +78,7 @@ while IFS= read -r LINE; do
     fi
 
     # Check HttpOnly flag
-    if echo "$LINE" | grep -qi "HttpOnly"; then
+    if echo "$CLEAN_LINE" | grep -qi "HttpOnly"; then
         echo -e "    ${GREEN}[OK]${RESET}      HttpOnly flag present"
     else
         echo -e "    ${RED}[MISSING]${RESET}  HttpOnly flag — cookie accessible via JavaScript (XSS risk)"
@@ -86,8 +86,8 @@ while IFS= read -r LINE; do
     fi
 
     # Check SameSite attribute
-    if echo "$LINE" | grep -qi "SameSite"; then
-        SAMESITE_VAL=$(echo "$LINE" | grep -oi "SameSite=[A-Za-z]*" | cut -d= -f2)
+    if echo "$CLEAN_LINE" | grep -qi "SameSite"; then
+        SAMESITE_VAL=$(echo "$CLEAN_LINE" | grep -oi "SameSite=[A-Za-z]*" | cut -d= -f2)
         if echo "$SAMESITE_VAL" | grep -qi "None"; then
             echo -e "    ${RED}[WEAK]${RESET}    SameSite=None — cross-site requests allowed (CSRF risk)"
             ISSUES_COUNT=$((ISSUES_COUNT + 1))
@@ -101,10 +101,10 @@ while IFS= read -r LINE; do
 
     # Check for session-like cookies without Secure
     if echo "$COOKIE_NAME" | grep -qiE "session|sess|sid|token|auth|jwt"; then
-        if ! echo "$LINE" | grep -qi "Secure"; then
+        if ! echo "$CLEAN_LINE" | grep -qi "Secure"; then
             echo -e "    ${RED}[CRITICAL]${RESET} Session cookie without Secure flag!"
         fi
-        if ! echo "$LINE" | grep -qi "HttpOnly"; then
+        if ! echo "$CLEAN_LINE" | grep -qi "HttpOnly"; then
             echo -e "    ${RED}[CRITICAL]${RESET} Session cookie without HttpOnly flag!"
         fi
     fi
